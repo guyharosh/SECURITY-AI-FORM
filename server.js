@@ -1,90 +1,86 @@
-import path from "path";
-import { fileURLToPath } from "url";
+// server.js  (ESM)
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import { OpenAI } from "openai";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+
+// ---------- OpenAI ----------
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// ---------- Static site ----------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 app.use(express.static(path.join(__dirname, "public")));
 
-// ------ OpenAI Client ------
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// ------ MAIN API: Build report ------
-app.post("/generate-report", async (req, res) => {
-  try {
-    const { answers } = req.body;
-
-    if (!answers) {
-      return res.status(400).json({ error: "Missing 'answers' field" });
-    }
-
-    // Ask AI to generate the security assessment text
-    const prompt = `
-      You are an expert in physical security, emergency preparedness,
-      critical infrastructure protection and operational risk.
-      Based on the following survey answers, create a clear, structured,
-      professional security assessment with:
-      - Risk Summary
-      - Key Vulnerabilities
-      - Recommended Actions
-      - Priority Levels (High / Medium / Low)
-
-      Survey answers:
-      ${JSON.stringify(answers, null, 2)}
-    `;
-
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const aiText = completion.choices[0].message.content;
-
-    // Generate PDF file
-    const pdfName = `security-report-${Date.now()}.pdf`;
-    const pdfPath = `/tmp/${pdfName}`;
-
-    const doc = new PDFDocument();
-    const stream = fs.createWriteStream(pdfPath);
-    doc.pipe(stream);
-
-    doc.fontSize(20).text("Security Assessment Report", { underline: true });
-    doc.moveDown();
-    doc.fontSize(12).text(aiText);
-
-    doc.end();
-
-    stream.on("finish", () => {
-      res.download(pdfPath, pdfName, () => {
-        fs.unlinkSync(pdfPath);
-      });
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "AI or PDF error", details: err.message });
-  }
-});
-
-// Serve static files
-app.use(express.static("public"));
-
-// Homepage
+// דף הבית (יש לנו public/index.html)
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ---- Start server ----
-app.listen(process.env.PORT || 3000, () =>
-  console.log("✅ Security AI backend running")
-);
+// ---------- יצירת PDF ע"י AI ----------
+app.post("/generate-pdf", async (req, res) => {
+  console.log("POST /generate-pdf", Object.keys(req.body || {}));
+
+  try {
+    const formData = req.body || {};
+    const prompt = `
+You are a security consultant. Based on the intake form below,
+write a concise one-page "Business Security & Emergency Preparedness Assessment"
+with clear headings and bullet points.
+
+Intake:
+${JSON.stringify(formData, null, 2)}
+`;
+
+    // קריאה ל-OpenAI (API החדש)
+    const ai = await client.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        { role: "system", content: "You are a senior security analyst." },
+        { role: "user", content: prompt }
+      ]
+    });
+
+    const aiText = ai.output_text || "No AI output.";
+
+    // הכנת PDF זמני בתיקיית /tmp (נדרש ב-Render)
+    const pdfName = "Security_Assessment_Report.pdf";
+    const pdfPath = `/tmp/${pdfName}`;
+    const doc = new PDFDocument({ margin: 40 });
+    const stream = fs.createWriteStream(pdfPath);
+    doc.pipe(stream);
+
+    doc.fontSize(18).text("Security Assessment Report", { underline: true });
+    doc.moveDown();
+    doc.fontSize(12).text(aiText, { align: "left" });
+    doc.end();
+
+    stream.on("finish", () => {
+      console.log("PDF ready:", pdfPath);
+      res.download(pdfPath, pdfName, () => {
+        try { fs.unlinkSync(pdfPath); } catch {}
+      });
+    });
+
+    stream.on("error", (e) => {
+      console.error("PDF stream error:", e);
+      res.status(500).json({ error: "PDF stream error", details: e.message });
+    });
+
+  } catch (err) {
+    console.error("GEN_ERR:", err?.stack || err);
+    res.status(500).json({ error: "AI or PDF error", details: err?.message });
+  }
+});
+
+// ---------- Start server ----------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("✅ Security AI backend running on", PORT));
