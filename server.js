@@ -1,3 +1,5 @@
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
@@ -8,6 +10,10 @@ import { OpenAI } from "openai";
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(express.static(path.join(__dirname, "public")));
 
 // ------ OpenAI Client ------
 const client = new OpenAI({
@@ -69,6 +75,21 @@ app.post("/generate-report", async (req, res) => {
     res.status(500).json({ error: "AI or PDF error", details: err.message });
   }
 });
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Serve static files
+app.use(express.static("public"));
+
+// Homepage
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // ---- Start server ----
-app.listen(10000, () => console.log("✅ Security AI backend running on port 10000"));
+app.listen(process.env.PORT || 3000, () =>
+  console.log("✅ Security AI backend running")
+);
