@@ -1,131 +1,86 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Security & Emergency Preparedness – AI Form</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f2f2f2;
-            padding: 40px;
-        }
-        h1 {
-            text-align: center;
-        }
-        form {
-            background: #fff;
-            padding: 20px;
-            max-width: 900px;
-            margin: auto;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        label {
-            font-weight: bold;
-            display: block;
-            margin-top: 20px;
-        }
-        input, textarea {
-            width: 100%;
-            padding: 10px;
-            margin-top: 8px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-        }
-        button {
-            margin-top: 20px;
-            padding: 15px;
-            width: 100%;
-            background: #007bff;
-            border: none;
-            color: white;
-            font-size: 18px;
-            border-radius: 5px;
-        }
-        button:hover {
-            background: #0056b3;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
+// server.js  (ESM)
+import express from "express";
+import bodyParser from "body-parser";
+import cors from "cors";
+import PDFDocument from "pdfkit";
+import fs from "fs";
+import { OpenAI } from "openai";
+import path from "path";
+import { fileURLToPath } from "url";
 
-<h1>Business Security & Emergency Preparedness Intake Form</h1>
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
 
-<form id="securityForm">
-    
-    <label>1. Full Business Name</label>
-    <input type="text" name="businessName">
+// ---------- OpenAI ----------
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    <label>2. Primary Contact (Full Name)</label>
-    <input type="text" name="contactName">
+// ---------- Static site ----------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "public")));
 
-    <label>3. Phone Number</label>
-    <input type="text" name="phone">
+// דף הבית (יש לנו public/index.html)
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-    <label>4. Email Address</label>
-    <input type="email" name="email">
+// ---------- יצירת PDF ע"י AI ----------
+app.post("/generate-pdf", async (req, res) => {
+  console.log("POST /generate-pdf", Object.keys(req.body || {}));
 
-    <label>5. Business Address</label>
-    <input type="text" name="address">
+  try {
+    const formData = req.body || {};
+    const prompt = `
+You are a security consultant. Based on the intake form below,
+write a concise one-page "Business Security & Emergency Preparedness Assessment"
+with clear headings and bullet points.
 
-    <label>6. Description of Business Activity</label>
-    <textarea name="businessActivity"></textarea>
+Intake:
+${JSON.stringify(formData, null, 2)}
+`;
 
-    <label>7. Employee Count (Full-time & Part-time)</label>
-    <input type="text" name="employees">
-
-    <label>8. Building Type / Facility Description</label>
-    <textarea name="facility"></textarea>
-
-    <label>9. Current Security Measures (CCTV, Access Control, Guards, Alarms)</label>
-    <textarea name="currentSecurity"></textarea>
-
-    <label>10. Past Incidents (Break-ins, Threats, Emergencies)</label>
-    <textarea name="pastIncidents"></textarea>
-
-    <label>11. Threat Concerns (Vandalism, Theft, Cyber, Internal, Terror-related)</label>
-    <textarea name="threatConcerns"></textarea>
-
-    <label>12. Critical Assets (Equipment, Data, Personnel, IP)</label>
-    <textarea name="criticalAssets"></textarea>
-
-    <label>13. Emergency Preparedness Status</label>
-    <textarea name="emergencyPreparedness"></textarea>
-
-    <label>14. Desired Outcomes from the Assessment</label>
-    <textarea name="desiredOutcomes"></textarea>
-
-    <button type="submit">Generate AI Security Report (PDF)</button>
-
-</form>
-
-<script>
-document.getElementById("securityForm").addEventListener("submit", async function(event) {
-    event.preventDefault();
-
-    const formData = Object.fromEntries(new FormData(event.target));
-
-    const response = await fetch("/generate-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+    // קריאה ל-OpenAI (API החדש)
+    const ai = await client.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        { role: "system", content: "You are a senior security analyst." },
+        { role: "user", content: prompt }
+      ]
     });
 
-    if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
+    const aiText = ai.output_text || "No AI output.";
 
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "Security_Assessment_Report.pdf";
-        a.click();
-    } else {
-        alert("Error generating report");
-    }
+    // הכנת PDF זמני בתיקיית /tmp (נדרש ב-Render)
+    const pdfName = "Security_Assessment_Report.pdf";
+    const pdfPath = `/tmp/${pdfName}`;
+    const doc = new PDFDocument({ margin: 40 });
+    const stream = fs.createWriteStream(pdfPath);
+    doc.pipe(stream);
+
+    doc.fontSize(18).text("Security Assessment Report", { underline: true });
+    doc.moveDown();
+    doc.fontSize(12).text(aiText, { align: "left" });
+    doc.end();
+
+    stream.on("finish", () => {
+      console.log("PDF ready:", pdfPath);
+      res.download(pdfPath, pdfName, () => {
+        try { fs.unlinkSync(pdfPath); } catch {}
+      });
+    });
+
+    stream.on("error", (e) => {
+      console.error("PDF stream error:", e);
+      res.status(500).json({ error: "PDF stream error", details: e.message });
+    });
+
+  } catch (err) {
+    console.error("GEN_ERR:", err?.stack || err);
+    res.status(500).json({ error: "AI or PDF error", details: err?.message });
+  }
 });
-</script>
 
-</body>
-</html>
+// ---------- Start server ----------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("✅ Security AI backend running on", PORT));
