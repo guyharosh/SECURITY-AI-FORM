@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Security & Emergency Preparedness – AI Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f2f2;
+            padding: 40px;
+        }
+        h1 {
+            text-align: center;
+        }
+        form {
+            background: #fff;
+            padding: 20px;
+            max-width: 900px;
+            margin: auto;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 20px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 8px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            margin-top: 20px;
+            padding: 15px;
+            width: 100%;
+            background: #007bff;
+            border: none;
+            color: white;
+            font-size: 18px;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Business Security & Emergency Preparedness Intake Form</h1>
+
+<form id="securityForm">
+    
+    <label>1. Full Business Name</label>
+    <input type="text" name="businessName">
+
+    <label>2. Primary Contact (Full Name)</label>
+    <input type="text" name="contactName">
+
+    <label>3. Phone Number</label>
+    <input type="text" name="phone">
+
+    <label>4. Email Address</label>
+    <input type="email" name="email">
+
+    <label>5. Business Address</label>
+    <input type="text" name="address">
+
+    <label>6. Description of Business Activity</label>
+    <textarea name="businessActivity"></textarea>
+
+    <label>7. Employee Count (Full-time & Part-time)</label>
+    <input type="text" name="employees">
+
+    <label>8. Building Type / Facility Description</label>
+    <textarea name="facility"></textarea>
+
+    <label>9. Current Security Measures (CCTV, Access Control, Guards, Alarms)</label>
+    <textarea name="currentSecurity"></textarea>
+
+    <label>10. Past Incidents (Break-ins, Threats, Emergencies)</label>
+    <textarea name="pastIncidents"></textarea>
+
+    <label>11. Threat Concerns (Vandalism, Theft, Cyber, Internal, Terror-related)</label>
+    <textarea name="threatConcerns"></textarea>
+
+    <label>12. Critical Assets (Equipment, Data, Personnel, IP)</label>
+    <textarea name="criticalAssets"></textarea>
+
+    <label>13. Emergency Preparedness Status</label>
+    <textarea name="emergencyPreparedness"></textarea>
+
+    <label>14. Desired Outcomes from the Assessment</label>
+    <textarea name="desiredOutcomes"></textarea>
+
+    <button type="submit">Generate AI Security Report (PDF)</button>
+
+</form>
+
+<script>
+document.getElementById("securityForm").addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    const formData = Object.fromEntries(new FormData(event.target));
+
+    const response = await fetch("/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+    });
+
+    if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "Security_Assessment_Report.pdf";
+        a.click();
+    } else {
+        alert("Error generating report");
+    }
+});
+</script>
+
+</body>
+</html>
