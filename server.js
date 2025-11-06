@@ -75,11 +75,6 @@ app.post("/generate-report", async (req, res) => {
     res.status(500).json({ error: "AI or PDF error", details: err.message });
   }
 });
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Serve static files
 app.use(express.static("public"));
