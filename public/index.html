@@ -1,86 +1,247 @@
-// server.js  (ESM)
-import express from "express";
-import bodyParser from "body-parser";
-import cors from "cors";
-import PDFDocument from "pdfkit";
-import fs from "fs";
-import { OpenAI } from "openai";
-import path from "path";
-import { fileURLToPath } from "url";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Business Security & Emergency Preparedness Intake Form</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --ink: #0f172a;
+      --muted: #475569;
+      --line: #e2e8f0;
+      --accent: #0ea5e9;
+      --accent-ink: #0b4e6b;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 0; background: var(--bg); color: var(--ink); }
+    .container { max-width: 980px; margin: 32px auto; padding: 0 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; box-shadow: 0 8px 24px rgba(16,24,40,.06); }
+    h1 { margin: 0 0 12px; font-weight: 800; letter-spacing: .2px; }
+    .subtitle { color: var(--muted); margin-bottom: 24px; }
+    hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
+    .grid { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+    .grid-1 { grid-template-columns: 1fr; }
+    label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+    input, textarea, select {
+      width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+      font-size: 15px; background: #fff; color: var(--ink);
+    }
+    textarea { min-height: 88px; resize: vertical; }
+    .section-title { margin-top: 8px; font-size: 18px; font-weight: 700; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .row { display: grid; gap: 14px; grid-template-columns: 1fr 1fr 1fr; }
+    .btn {
+      background: var(--accent); color: #fff; border: none; padding: 12px 18px; border-radius: 12px;
+      font-weight: 700; cursor: pointer; transition: transform .05s ease, box-shadow .2s ease;
+      box-shadow: 0 8px 16px rgba(14,165,233,.25);
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .footer { color: var(--muted); font-size: 13px; margin-top: 12px; }
+    @media (max-width: 780px) {
+      .grid, .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Business Security & Emergency Preparedness Intake Form</h1>
+      <div class="subtitle">Please complete the form below. Fields marked “(optional)” may be skipped. When finished, click “Generate AI Security Report (PDF)”.</div>
 
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+      <!-- 1) Organization & Primary Contact -->
+      <div class="section-title">1) Organization & Primary Contact</div>
+      <div class="grid">
+        <div>
+          <label>Full Business Name</label>
+          <input id="businessName" type="text" placeholder="e.g., Bazan Ltd." />
+        </div>
+        <div>
+          <label>Primary Contact (Full Name)</label>
+          <input id="contactName" type="text" placeholder="e.g., Guy Harosh" />
+        </div>
+        <div>
+          <label>Phone Number</label>
+          <input id="phone" type="text" placeholder="+1 555 123 4567" />
+        </div>
+        <div>
+          <label>Email Address</label>
+          <input id="email" type="email" placeholder="name@company.com" />
+        </div>
+        <div class="grid-1">
+          <label>Business Address</label>
+          <input id="address" type="text" placeholder="Street, City, State/Province, Country" />
+        </div>
+      </div>
 
-// ---------- OpenAI ----------
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      <hr/>
 
-// ---------- Static site ----------
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use(express.static(path.join(__dirname, "public")));
+      <!-- 2) Business Profile -->
+      <div class="section-title">2) Business Profile</div>
+      <div class="grid">
+        <div>
+          <label>Business Activity / Industry</label>
+          <input id="businessActivity" type="text" placeholder="e.g., Oil & Gas Refinery" />
+        </div>
+        <div>
+          <label>Number of Employees</label>
+          <input id="employees" type="number" min="1" placeholder="e.g., 1500" />
+        </div>
+        <div>
+          <label>Primary Facility Type</label>
+          <input id="facility" type="text" placeholder="e.g., Single campus, HQ + plants, distributed branches…" />
+        </div>
+      </div>
 
-// דף הבית (יש לנו public/index.html)
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+      <hr/>
 
-// ---------- יצירת PDF ע"י AI ----------
-app.post("/generate-pdf", async (req, res) => {
-  console.log("POST /generate-pdf", Object.keys(req.body || {}));
+      <!-- 3) Current Security Measures (free text) -->
+      <div class="section-title">3) Current Security Measures</div>
+      <div class="grid-1">
+        <label>Describe current measures in place (guards, access control, CCTV, alarms, SOC, cyber, policies, drills, etc.)</label>
+        <textarea id="currentSecurity" placeholder="Short overview of the current security posture..."></textarea>
+      </div>
 
-  try {
-    const formData = req.body || {};
-    const prompt = `
-You are a security consultant. Based on the intake form below,
-write a concise one-page "Business Security & Emergency Preparedness Assessment"
-with clear headings and bullet points.
+      <hr/>
 
-Intake:
-${JSON.stringify(formData, null, 2)}
-`;
+      <!-- 4) Past Incidents -->
+      <div class="section-title">4) Past Incidents (12–24 months)</div>
+      <div class="grid-1">
+        <label>Summarize notable incidents (security breaches, theft, vandalism, safety events, outages, cyber incidents, etc.)</label>
+        <textarea id="pastIncidents" placeholder="Describe previous incidents, frequency, impact, lessons learned…"></textarea>
+      </div>
 
-    // קריאה ל-OpenAI (API החדש)
-    const ai = await client.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        { role: "system", content: "You are a senior security analyst." },
-        { role: "user", content: prompt }
-      ]
-    });
+      <hr/>
 
-    const aiText = ai.output_text || "No AI output.";
+      <!-- 5) Threat Concerns -->
+      <div class="section-title">5) Threat Concerns</div>
+      <div class="grid-1">
+        <label>Main concerns (vandalism, insider threats, sabotage, perimeter intrusion, civil unrest, terrorism, cyber threats, fraud, IP loss, etc.)</label>
+        <textarea id="threatConcerns" placeholder="List and describe key threat scenarios…"></textarea>
+      </div>
 
-    // הכנת PDF זמני בתיקיית /tmp (נדרש ב-Render)
-    const pdfName = "Security_Assessment_Report.pdf";
-    const pdfPath = `/tmp/${pdfName}`;
-    const doc = new PDFDocument({ margin: 40 });
-    const stream = fs.createWriteStream(pdfPath);
-    doc.pipe(stream);
+      <hr/>
 
-    doc.fontSize(18).text("Security Assessment Report", { underline: true });
-    doc.moveDown();
-    doc.fontSize(12).text(aiText, { align: "left" });
-    doc.end();
+      <!-- 6) Critical Assets -->
+      <div class="section-title">6) Critical Assets</div>
+      <div class="grid-1">
+        <label>What must be protected? (equipment, OT/IT systems, data, personnel, IP, brand, supply chain nodes, etc.)</label>
+        <textarea id="criticalAssets" placeholder="Name the assets and why they are critical…"></textarea>
+      </div>
 
-    stream.on("finish", () => {
-      console.log("PDF ready:", pdfPath);
-      res.download(pdfPath, pdfName, () => {
-        try { fs.unlinkSync(pdfPath); } catch {}
-      });
-    });
+      <hr/>
 
-    stream.on("error", (e) => {
-      console.error("PDF stream error:", e);
-      res.status(500).json({ error: "PDF stream error", details: e.message });
-    });
+      <!-- 7) Emergency Preparedness -->
+      <div class="section-title">7) Emergency Preparedness</div>
+      <div class="grid">
+        <div class="grid-1">
+          <label>Existing Plans / Capabilities</label>
+          <textarea id="emergencyPreparedness" placeholder="Evacuation plans, shelter-in-place, ICS/NIMS alignment, drills, medical response, BCP/DRP, etc."></textarea>
+        </div>
+      </div>
 
-  } catch (err) {
-    console.error("GEN_ERR:", err?.stack || err);
-    res.status(500).json({ error: "AI or PDF error", details: err?.message });
-  }
-});
+      <hr/>
 
-// ---------- Start server ----------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("✅ Security AI backend running on", PORT));
+      <!-- 8) Desired Outcomes -->
+      <div class="section-title">8) Desired Outcomes from the Assessment</div>
+      <div class="grid-1">
+        <textarea id="desiredOutcomes" placeholder="What would success look like? What deliverables do you want?"></textarea>
+      </div>
+
+      <!-- Optional enrichment – won’t break server if left empty -->
+      <hr/>
+      <div class="section-title">9) (Optional) Additional Details</div>
+      <div class="grid">
+        <div class="grid-1">
+          <label>Site Layout / Perimeter Notes (optional)</label>
+          <textarea id="opt_site" placeholder="Perimeter fences, gates, access roads, neighboring risks, lighting, parking…"></textarea>
+        </div>
+        <div class="grid-1">
+          <label>Access Control (optional)</label>
+          <textarea id="opt_access" placeholder="Badges, biometrics, visitor management, contractor access, tailgating controls…"></textarea>
+        </div>
+        <div class="grid-1">
+          <label>CCTV & Alarms (optional)</label>
+          <textarea id="opt_cctv" placeholder="Coverage, retention, analytics, monitoring, response SOPs…"></textarea>
+        </div>
+        <div class="grid-1">
+          <label>Cyber/OT Notes (optional)</label>
+          <textarea id="opt_cyber" placeholder="Network segmentation, asset inventory, patching, SOC/SIEM, MFA, backups…"></textarea>
+        </div>
+        <div class="grid-1">
+          <label>Compliance (optional)</label>
+          <textarea id="opt_compliance" placeholder="Regulatory frameworks, audits, certifications, data privacy constraints…"></textarea>
+        </div>
+      </div>
+
+      <hr/>
+
+      <button id="submitBtn" class="btn">Generate AI Security Report (PDF)</button>
+      <div class="footer">By clicking the button, you agree that the provided information may be used to generate a draft security assessment for review.</div>
+    </div>
+  </div>
+
+  <script>
+    function value(id) {
+      const el = document.getElementById(id);
+      return (el && el.value) ? el.value.trim() : "";
+    }
+
+    async function generatePdf() {
+      const formData = {
+        businessName: value("businessName"),
+        contactName: value("contactName"),
+        phone: value("phone"),
+        email: value("email"),
+        address: value("address"),
+        businessActivity: value("businessActivity"),
+        employees: value("employees"),
+        facility: value("facility"),
+        currentSecurity: value("currentSecurity"),
+        pastIncidents: value("pastIncidents"),
+        threatConcerns: value("threatConcerns"),
+        criticalAssets: value("criticalAssets"),
+        emergencyPreparedness: value("emergencyPreparedness"),
+        desiredOutcomes: value("desiredOutcomes"),
+
+        // optional enrichments (server יתעלם אם לא משתמשים)
+        optional: {
+          site: value("opt_site"),
+          access: value("opt_access"),
+          cctv: value("opt_cctv"),
+          cyber: value("opt_cyber"),
+          compliance: value("opt_compliance"),
+        }
+      };
+
+      try {
+        const res = await fetch("/generate-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert("Error generating report" + (err?.details ? (": " + err.details) : ""));
+          return;
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "Security_Assessment_Report.pdf";
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert("Network error while generating report");
+        console.error(e);
+      }
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", generatePdf);
+  </script>
+</body>
+</html>
